@@ -1,8 +1,9 @@
 import PIL
 from PIL import Image
 import matplotlib.pyplot as plt
-from skimage.transform import resize
-
+from libtiff import TIFF
+from libtiff import TIFFfile, TIFFimage
+from scipy.misc import imresize
 import numpy as np
 import glob
 import cv2
@@ -10,14 +11,13 @@ import os
 import math
 import skimage.io as io
 import skimage.transform as trans
-from tensorflow.keras.models import *
-from tensorflow.keras.layers import *
-from tensorflow.keras.optimizers import *
-from tensorflow.keras.callbacks import ModelCheckpoint, LearningRateScheduler
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from tensorflow.keras import backend as K
-from iou import iou  # ✅ You need `iou.py` file in same directory
-
+from keras.models import *
+from keras.layers import *
+from keras.optimizers import *
+from keras.callbacks import ModelCheckpoint, LearningRateScheduler
+from keras.preprocessing.image import ImageDataGenerator
+from keras import backend as K
+from iou import iou
 #%matplotlib inline
 
 

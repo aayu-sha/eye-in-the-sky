@@ -1,7 +1,9 @@
 import PIL
 from PIL import Image
 import matplotlib.pyplot as plt
-from skimage.transform import resize
+from libtiff import TIFF
+from libtiff import TIFFfile, TIFFimage
+from scipy.misc import imresize
 import numpy as np
 import math
 import glob
@@ -9,13 +11,12 @@ import cv2
 import os
 import skimage.io as io
 import skimage.transform as trans
-import tensorflow as tf
-from tensorflow.keras.models import *
-from tensorflow.keras.layers import *
-from tensorflow.keras.optimizers import *
-from tensorflow.keras.callbacks import ModelCheckpoint, LearningRateScheduler
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from tensorflow.keras import backend as keras
+from keras.models import *
+from keras.layers import *
+from keras.optimizers import *
+from keras.callbacks import ModelCheckpoint, LearningRateScheduler
+from keras.preprocessing.image import ImageDataGenerator
+from keras import backend as keras
 #%matplotlib inline
 
 
@@ -202,8 +203,8 @@ trainx_list = []
 for fname in filelist_trainx[:13]:
     
     # Reading the image
-    image = io.imread(fname)
-
+    tif = TIFF.open(fname)
+    image = tif.read_image()
     
     # Padding as required and cropping
     crops_list = crops(image)
@@ -220,8 +221,8 @@ trainy_list = []
 for fname in filelist_trainy[:13]:
     
     # Reading the image
-    image = io.imread(fname)
-
+    tif = TIFF.open(fname)
+    image = tif.read_image()
     
     # Padding as required and cropping
     crops_list =crops(image)
@@ -238,8 +239,8 @@ testx_list = []
 #for fname in filelist_trainx[13]:
     
     # Reading the image
-image = io.imread(filelist_trainx[13])
-
+tif = TIFF.open(filelist_trainx[13])
+image = tif.read_image()
     
 # Padding as required and cropping
 crops_list = crops(image)
@@ -256,8 +257,8 @@ testy_list = []
 #for fname in filelist_trainx[13]:
     
 # Reading the image
-image = io.imread(filelist_trainx[13])
-
+tif = TIFF.open(filelist_trainy[13])
+image = tif.read_image()
     
 # Padding as required and cropping
 crops_list = crops(image)
@@ -271,29 +272,29 @@ testy = np.asarray(testy_list)
 
 xtrain_list = []
 
-target_shape = (512, 512, 4)  # adjust channels if not 4
-
 for fname in filelist_trainx:
-    image = io.imread(fname)
-
+    
+    # Reading the image
+    tif = TIFF.open(fname)
+    image = tif.read_image()
+    
     crop_size = 128
+    
     stride = 64
+    
     h, w, c = image.shape
+    
     n_h = int(int(h/stride))
     n_w = int(int(w/stride))
-
+    
+    
     image = padding(image, w, h, c, crop_size, stride, n_h, n_w)
-
-    # Resize to fixed shape
-    image = cv2.resize(image, (target_shape[1], target_shape[0]))  # cv2 expects (width, height)
-
+    
     xtrain_list.append(image)
 
-# x_train = np.asarray(xtrain_list)
-
-
-image = io.imread('Inter-IIT-CSRE/The-Eye-in-the-Sky-dataset/sat/14.tif')
-
+x_train = np.asarray(xtrain_list)
+tif = TIFF.open('Inter-IIT-CSRE/The-Eye-in-the-Sky-dataset/sat/14.tif')
+image = tif.read_image()
 crop_size = 128
     
 stride = 64
@@ -309,29 +310,31 @@ x_train = image
 
 ytrain_list = []
 
-target_shape = (512, 512, 4)  # adjust channels if not 4
-
 for fname in filelist_trainy:
-    image = io.imread(fname)
-
+    
+    # Reading the image
+    tif = TIFF.open(fname)
+    image = tif.read_image()
+    
     crop_size = 128
+    
     stride = 64
+    
     h, w, c = image.shape
+    
     n_h = int(int(h/stride))
     n_w = int(int(w/stride))
-
+    
+    
     image = padding(image, w, h, c, crop_size, stride, n_h, n_w)
-
-    # Resize to fixed shape
-    image = cv2.resize(image, (target_shape[1], target_shape[0]))  # cv2 expects (width, height)
-
+    
     ytrain_list.append(image)
 
 y_train = np.asarray(ytrain_list)
 
 
-image = io.imread('Inter-IIT-CSRE/The-Eye-in-the-Sky-dataset/gt/14.tif')
-
+tif = TIFF.open('Inter-IIT-CSRE/The-Eye-in-the-Sky-dataset/gt/14.tif')
+image = tif.read_image()
 crop_size = 128
     
 stride = 64
@@ -404,9 +407,9 @@ def unet(shape = (None,None,4)):
     # Output layer of the U-Net with a softmax activation
     conv10 = Conv2D(9, 1, activation = 'softmax')(conv9)
 
-    model = Model(inputs = inputs, outputs = conv10)
+    model = Model(input = inputs, output = conv10)
 
-    model.compile(optimizer = Adam(learning_rate = 0.0001), loss = 'categorical_crossentropy', metrics = ['accuracy'])
+    model.compile(optimizer = Adam(lr = 0.0001), loss = 'categorical_crossentropy', metrics = ['accuracy'])
     
     model.summary()
     
@@ -433,18 +436,13 @@ color_dict = {0: (0, 0, 0),
               8: (255, 255, 255)}
 
 def rgb_to_onehot(rgb_arr, color_dict):
-    if rgb_arr.ndim != 3 or rgb_arr.shape[2] != 3:
-        raise ValueError(f"Expected image with 3 channels (RGB), but got shape {rgb_arr.shape}")
-    
     num_classes = len(color_dict)
-    shape = rgb_arr.shape[:2] + (num_classes,)
-    arr = np.zeros(shape, dtype=np.int8)
-
+    shape = rgb_arr.shape[:2]+(num_classes,)
+    #print(shape)
+    arr = np.zeros( shape, dtype=np.int8 )
     for i, cls in enumerate(color_dict):
-        arr[:, :, i] = np.all(rgb_arr == color_dict[cls], axis=-1)
-    
+        arr[:,:,i] = np.all(rgb_arr.reshape( (-1,3) ) == color_dict[i], axis=1).reshape(shape[:2])
     return arr
-
 
 def onehot_to_rgb(onehot, color_dict):
     single_layer = np.argmax(onehot, axis=-1)
@@ -455,28 +453,26 @@ def onehot_to_rgb(onehot, color_dict):
 
 
 # Convert trainy and testy into one hot encode
-trainy_hot = []
-for i in range(trainy.shape[0]):
-    if trainy[i].shape[-1] != 3:
-        print(f"Skipping image {i} with shape {trainy[i].shape}")
-        continue
-    hot_img = rgb_to_onehot(trainy[i], color_dict)
-    trainy_hot.append(hot_img)
 
+trainy_hot = []
+
+for i in range(trainy.shape[0]):
+    
+    hot_img = rgb_to_onehot(trainy[i], color_dict)
+    
+    trainy_hot.append(hot_img)
+    
 trainy_hot = np.asarray(trainy_hot)
 
-
-
 testy_hot = []
-for i in range(testy.shape[0]):
-    print(f"Image {i} shape: {testy[i].shape}")
-    print("Unique pixel values:", np.unique(testy[i]))
-    
-    img = testy[i][:,:,:3] if testy[i].shape[-1] == 4 else testy[i]
-    hot_img = rgb_to_onehot(img, color_dict)
-    testy_hot.append(hot_img)
-testy_hot = np.asarray(testy_hot)
 
+for i in range(testy.shape[0]):
+    
+    hot_img = rgb_to_onehot(testy[i], color_dict)
+    
+    testy_hot.append(hot_img)
+    
+testy_hot = np.asarray(testy_hot)
 
 
 '''#trainx = trainx/np.max(trainx)
@@ -588,4 +584,3 @@ plt.close()
 
 #accuracy = model.evaluate(x=x_test,y=y_test,batch_size=16)
 #print("Accuracy: ",accuracy[1])
-
